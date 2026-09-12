@@ -4,13 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>房產吸引力分析器 V1</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{--bg:#f5f7fa;--card:#fff;--text:#18212f;--muted:#687386;--line:#e5e9ef;--accent:#2463eb}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif}
 .wrap{max-width:1200px;margin:auto;padding:24px}.header{margin-bottom:18px}.header h1{margin:0 0 6px;font-size:28px}.header p{margin:0;color:var(--muted)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px #00000008}
-.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.map{height:430px;border-radius:12px;overflow:hidden}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.map{height:430px;border-radius:12px;overflow:hidden}.route-panel{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fafbfc}.route-panel button{margin:4px 6px 0 0}
 label{font-size:13px;font-weight:700;display:block;margin:10px 0 6px}input,select{width:100%;padding:10px 12px;border:1px solid #ccd3df;border-radius:10px;font-size:14px}
 button{border:0;border-radius:10px;padding:10px 15px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-top:12px}.secondary{background:#eef3ff;color:#174bb9;margin-left:6px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.scorebox{display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:9px}
@@ -50,17 +49,23 @@ button{border:0;border-radius:10px;padding:10px 15px;background:var(--accent);co
         <button class="secondary" onclick="openLeju()">開啟樂居</button>
       </div>
     </div>
-    <div class="note">目前為 V1 Prototype：樂居資料仍以欄位輸入驗證流程；四筆車程為測試資料，下一階段接後端導航/路況資料。</div>
+    <div class="note">V1：生活機能／人文素質／道路壅塞已改為後端真實資料介接；地圖使用 Google Maps；點選房產標記可計算到 TI／微風南山的駕車路線。P0 車程四筆目前仍為測試資料。</div>
   </div>
 
   <div class="grid">
     <div class="card">
       <div class="section-title">② 地圖</div>
       <div id="map" class="map"></div>
+      <div id="routePanel" class="route-panel">
+        <b>🚗 路線</b>
+        <div class="note">點選地圖上的 🏠 房產標記後，可查看到 TI 與微風南山的駕車路線。</div>
+        <div id="routeStatus" class="note"></div>
+        <div id="routeButtons"></div>
+      </div>
       <div class="legend">
         <span class="tag">🏠 房產</span>
         <span class="tag">📍 德州儀器</span>
-        <span class="tag">📍 微風南山</span>
+        <span class="tag">📍 微風南山</span><span class="tag">🚗 點房產查看路線</span>
       </div>
     </div>
 
@@ -86,57 +91,173 @@ button{border:0;border-radius:10px;padding:10px 15px;background:var(--accent);co
       <div class="card">
         <div class="section-title">④ 生活品質 P1</div>
         <div class="row">
-          <div class="scorebox"><div><b>生活機能</b><div class="note">超商 250m / 超市 1.5km</div></div><div class="score" id="life">—</div></div>
-          <div class="scorebox"><div><b>人文素質</b><div class="note">區域統計指數（待接官方資料）</div></div><div class="score" id="culture">—</div></div>
+          <div class="scorebox"><div style="width:100%">
+            <div style="display:flex;justify-content:space-between;align-items:center"><b>生活機能 · 35%</b><div class="score" id="life">—</div></div>
+            <div class="note">便利商店 250m：<b id="convCount">—</b> 家　超市 1.5km：<b id="marketCount">—</b> 家</div>
+          </div></div>
+          <div class="scorebox"><div style="width:100%">
+            <div style="display:flex;justify-content:space-between;align-items:center"><b>人文素質 · 35%</b><div class="score" id="culture">—</div></div>
+            <div class="note" id="cultureDetail">區域所得統計指數</div>
+          </div></div>
         </div>
-        <div class="scorebox"><div><b>道路壅塞</b><div class="note">尖峰道路壅塞指數（待接路況資料）</div></div><div class="score" id="traffic">—</div></div>
+        <div class="scorebox"><div style="width:100%">
+          <div style="display:flex;justify-content:space-between;align-items:center"><b>道路壅塞 · 30%</b><div class="score" id="traffic">—</div></div>
+          <div class="note" id="trafficDetail">TDX 即時車流資料</div>
+        </div></div>
         <div class="section-title">P1 總分 <span class="total" id="p1">—</span></div>
+        <div class="note">生活機能使用 Google Places；人文素質使用財政部綜合所得資料；道路壅塞使用 TDX。資料查不到時不會偽造分數。</div>
       </div>
     </div>
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const TI = {lat:25.0587,lng:121.5483,name:"德州儀器台北分公司",address:"台北市松山區敦化北路168號"};
 const BREEZE = {lat:25.0342,lng:121.5660,name:"微風南山",address:"台北市信義區松智路17號"};
 const FALLBACK = {lat:25.0255,lng:121.4695,name:"甲山林帝景1號"};
 
-let map, markers=[];
-function initMap(){
-  map=L.map('map').setView([25.035,121.515],12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
-}
-function marker(latlng,title,subtitle){
-  const m=L.marker(latlng).addTo(map).bindPopup("<b>"+title+"</b><br>"+subtitle);
-  markers.push(m); return m;
-}
-function clearMarkers(){markers.forEach(m=>map.removeLayer(m));markers=[]}
+let map, houseMarker, tiMarker, breezeMarker, propertyPoint;
+let routePolylines = [];
+let geocoder;
+let RouteLib;
 
-async function geocode(q){
+async function loadGoogleMaps(){
+  const cfg = await fetch('/api/maps-key').then(r=>r.json());
+  if(!cfg.ok || !cfg.key) throw new Error(cfg.error || 'Google Maps API Key 未設定');
+  await new Promise((resolve,reject)=>{
+    if(window.google && google.maps){ resolve(); return; }
+    const s=document.createElement('script');
+    s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(cfg.key)+'&v=weekly&libraries=places';
+    s.async=true; s.defer=true;
+    s.onload=resolve; s.onerror=()=>reject(new Error('Google Maps 載入失敗'));
+    document.head.appendChild(s);
+  });
+  const [{Map}, {AdvancedMarkerElement}] = await Promise.all([
+    google.maps.importLibrary('maps'),
+    google.maps.importLibrary('marker')
+  ]);
+  const {Route} = await google.maps.importLibrary('routes');
+  RouteLib=Route;
+  map=new Map(document.getElementById('map'),{
+    center:{lat:25.035,lng:121.515},zoom:12,
+    mapId:'DEMO_MAP_ID',
+    mapTypeControl:true,streetViewControl:false,fullscreenControl:true
+  });
+  geocoder=new google.maps.Geocoder();
+  return AdvancedMarkerElement;
+}
+
+async function initMap(){
   try{
-    const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&q='+encodeURIComponent(q);
-    const r=await fetch(url,{headers:{'Accept':'application/json'}});
-    const a=await r.json();
-    if(a.length) return {lat:+a[0].lat,lng:+a[0].lon};
-  }catch(e){}
-  return null;
+    const AdvancedMarkerElement = await loadGoogleMaps();
+    window.AdvancedMarkerElement=AdvancedMarkerElement;
+    analyze();
+  }catch(e){
+    document.getElementById('routeStatus').textContent='Google Maps 載入失敗：'+e.message;
+    console.error(e);
+  }
+}
+
+function clearRoutes(){
+  routePolylines.forEach(p=>p.setMap(null));
+  routePolylines=[];
+  document.getElementById('routeButtons').innerHTML='';
+}
+
+function makeMarker(position,title,subtitle,content,clickable=false){
+  const marker=new window.AdvancedMarkerElement({
+    map,position,title,content
+  });
+  marker._subtitle=subtitle;
+  if(clickable){
+    marker.addListener('click',()=>{
+      map.panTo(position);
+      markerClickHouse();
+    });
+  }
+  return marker;
+}
+
+function housePin(){
+  const el=document.createElement('div');
+  el.textContent='🏠';
+  el.style.fontSize='30px';
+  el.style.cursor='pointer';
+  return el;
+}
+function placePin(emoji){
+  const el=document.createElement('div');
+  el.textContent=emoji;
+  el.style.fontSize='27px';
+  return el;
+}
+
+function markerClickHouse(){
+  if(!propertyPoint)return;
+  clearRoutes();
+  const panel=document.getElementById('routeStatus');
+  panel.textContent='已選擇房產，請選擇目的地：';
+  const box=document.getElementById('routeButtons');
+  box.innerHTML='';
+  const b1=document.createElement('button');
+  b1.textContent='🚗 到德州儀器';
+  b1.onclick=()=>drawRoute(TI,'TI');
+  const b2=document.createElement('button');
+  b2.textContent='🚗 到微風南山';
+  b2.onclick=()=>drawRoute(BREEZE,'微風南山');
+  box.append(b1,b2);
+}
+
+async function drawRoute(destination,label){
+  if(!propertyPoint || !RouteLib)return;
+  const status=document.getElementById('routeStatus');
+  status.textContent='正在計算到 '+label+' 的駕車路線…';
+  clearRoutes();
+  try{
+    const {routes}=await RouteLib.computeRoutes({
+      origin:propertyPoint,
+      destination:{lat:destination.lat,lng:destination.lng},
+      travelMode:'DRIVING',
+      routingPreference:'TRAFFIC_AWARE',
+      fields:['path','distanceMeters','durationMillis']
+    });
+    if(!routes || !routes.length) throw new Error('找不到路線');
+    const route=routes[0];
+    routePolylines=route.createPolylines();
+    routePolylines.forEach(p=>p.setMap(map));
+    const km=(route.distanceMeters/1000).toFixed(1);
+    const mins=Math.round(route.durationMillis/60000);
+    status.innerHTML='<b>'+label+'</b>：約 '+km+' km · '+mins+' 分鐘（Google Maps 即時路況路線）';
+    const bounds=new google.maps.LatLngBounds();
+    route.path.forEach(x=>bounds.extend(x));
+    map.fitBounds(bounds);
+  }catch(e){
+    status.textContent='路線計算失敗：'+e.message;
+    console.error(e);
+  }
 }
 
 function clamp(x){return Math.max(0,Math.min(100,x))}
 function commuteScore(avg, ideal, max){ if(avg<=ideal)return 100; if(avg>=max)return 0; return clamp(100*(max-avg)/(max-ideal)); }
 function totalScore(v){ if(v<=3500)return 100; if(v>=4200)return 0; return clamp(100*(4200-v)/(4200-3500)); }
 function unitScore(v){ if(v<=65)return 100; if(v>=105)return 0; return clamp(100*(105-v)/(105-65)); }
-
 function setScore(id,v){document.getElementById(id).textContent=v.toFixed(1);}
 
-function analyze(){
+async function geocodeGoogle(address){
+  const response=await geocoder.geocode({address:address,region:'TW'});
+  if(response.results && response.results.length){
+    const loc=response.results[0].geometry.location;
+    return {lat:loc.lat(),lng:loc.lng(),formattedAddress:response.results[0].formatted_address};
+  }
+  return null;
+}
+
+async function analyze(){
   const total=+document.getElementById('totalPrice').value;
   const unit=+document.getElementById('unitPrice').value;
   const noise=+document.getElementById('noise').value;
 
-  // Prototype commute inputs: these four values are clearly separated by peak period.
-  // Replace these values with a routing/traffic API in the backend.
+  // P0 commute test data until historical peak-time traffic is connected.
   const tiAM=18, tiPM=26, bAM=23, bPM=28;
   const tiAvg=(tiAM+tiPM)/2, bAvg=(bAM+bPM)/2;
   const ti=commuteScore(tiAvg,15,35);
@@ -151,28 +272,90 @@ function analyze(){
   document.getElementById('bAM').textContent=bAM;
   document.getElementById('bPM').textContent=bPM;
   document.getElementById('bAvg').textContent=bAvg.toFixed(1);
+
   const p0=ti*.20+br*.20+ts*.25+us*.25+noise*.10;
   document.getElementById('p0').textContent=p0.toFixed(1);
 
-  // Temporary P1 baseline for UI validation; replace by POI / regional / traffic APIs.
-  const life=75,culture=82,traffic=65;
-  setScore('life',life);setScore('culture',culture);setScore('traffic',traffic);
-  const p1=life*.35+culture*.35+traffic*.30;
-  document.getElementById('p1').textContent=p1.toFixed(1);
+  clearP1UI();
+  try{
+    const p = await geocodeGoogle(document.getElementById('address').value);
+    if(!p){
+      updateMap(null);
+      return;
+    }
+    propertyPoint=p;
+    updateMap(p);
 
-  updateMap();
+    const [placesRes, areaRes, trafficRes] = await Promise.all([
+      fetch('/api/places?lat='+encodeURIComponent(p.lat)+'&lng='+encodeURIComponent(p.lng)).then(r=>r.json()),
+      fetch('/api/area-score?lat='+encodeURIComponent(p.lat)+'&lng='+encodeURIComponent(p.lng)+'&address='+encodeURIComponent(document.getElementById('address').value)).then(r=>r.json()),
+      fetch('/api/traffic?lat='+encodeURIComponent(p.lat)+'&lng='+encodeURIComponent(p.lng)).then(r=>r.json())
+    ]);
+
+    if(placesRes.ok){
+      setScore('life',placesRes.score);
+      document.getElementById('convCount').textContent=placesRes.convenienceCount;
+      document.getElementById('marketCount').textContent=placesRes.supermarketCount;
+    }
+    if(areaRes.ok){
+      setScore('culture',areaRes.score);
+      document.getElementById('cultureDetail').textContent =
+        (areaRes.city||'')+' '+(areaRes.district||'')+' · 區域綜合所得指數 '+Number(areaRes.score).toFixed(1)+'（'+(areaRes.year||'')+'年）';
+    }
+    if(trafficRes.ok){
+      setScore('traffic',trafficRes.score);
+      document.getElementById('trafficDetail').textContent =
+        (trafficRes.city||'')+' · 最近道路 '+(trafficRes.roadName||'')+
+        ' · '+(trafficRes.source||'TDX')+(trafficRes.dataTime?' · '+trafficRes.dataTime:'');
+    }
+
+    const life=placesRes.ok?+placesRes.score:null;
+    const culture=areaRes.ok?+areaRes.score:null;
+    const traffic=trafficRes.ok?+trafficRes.score:null;
+    if(life!==null && culture!==null && traffic!==null){
+      const p1=life*.35+culture*.35+traffic*.30;
+      document.getElementById('p1').textContent=p1.toFixed(1);
+    }
+  }catch(e){
+    document.getElementById('p1').textContent='—';
+    document.getElementById('routeStatus').textContent='地圖/資料查詢失敗：'+e.message;
+    console.error(e);
+  }
 }
-async function updateMap(){
-  clearMarkers();
-  let p=await geocode(document.getElementById('address').value);
-  if(!p)p={lat:FALLBACK.lat,lng:FALLBACK.lng};
-  const pm=marker([p.lat,p.lng],"🏠 "+document.getElementById('name').value,document.getElementById('address').value);
-  const tm=marker([TI.lat,TI.lng],"📍 "+TI.name,TI.address);
-  const bm=marker([BREEZE.lat,BREEZE.lng],"📍 "+BREEZE.name,BREEZE.address);
-  const group=L.featureGroup([pm,tm,bm]); map.fitBounds(group.getBounds().pad(.15));
+
+function clearP1UI(){
+  ['life','culture','traffic'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('convCount').textContent='—';
+  document.getElementById('marketCount').textContent='—';
+  document.getElementById('cultureDetail').textContent='查詢官方區域所得資料中…';
+  document.getElementById('trafficDetail').textContent='查詢 TDX 路況中…';
+  document.getElementById('p1').textContent='—';
 }
+
+function updateMap(p){
+  clearRoutes();
+  if(houseMarker){houseMarker.map=null;tiMarker.map=null;breezeMarker.map=null;}
+  if(!p)return;
+
+  houseMarker=makeMarker(
+    {lat:p.lat,lng:p.lng},
+    '🏠 '+document.getElementById('name').value,
+    document.getElementById('address').value,
+    housePin(),true
+  );
+  tiMarker=makeMarker({lat:TI.lat,lng:TI.lng},'📍 '+TI.name,TI.address,placePin('📍'));
+  breezeMarker=makeMarker({lat:BREEZE.lat,lng:BREEZE.lng},'📍 '+BREEZE.name,BREEZE.address,placePin('📍'));
+
+  const bounds=new google.maps.LatLngBounds();
+  bounds.extend({lat:p.lat,lng:p.lng});
+  bounds.extend({lat:TI.lat,lng:TI.lng});
+  bounds.extend({lat:BREEZE.lat,lng:BREEZE.lng});
+  map.fitBounds(bounds,{top:30,right:30,bottom:30,left:30});
+  document.getElementById('routeStatus').textContent='點選 🏠 房產標記查看到 TI／微風南山的路線。';
+}
+
 function openLeju(){window.open(document.getElementById('lejuUrl').value,'_blank')}
-initMap(); analyze();
+initMap();
 </script>
 </body>
 </html>
