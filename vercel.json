@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/real_estate_attractiveness.html"
+    },
+    {
+      "source": "/real_estate_attractiveness",
+      "destination": "/real_estate_attractiveness.html"
+    }
+  ]
+}
