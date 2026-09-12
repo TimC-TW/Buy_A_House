@@ -50,7 +50,7 @@ button{border:0;border-radius:10px;padding:10px 15px;background:var(--accent);co
         <button class="secondary" onclick="openLeju()">開啟樂居</button>
       </div>
     </div>
-    <div class="note">Prototype 限制：瀏覽器版目前不直接繞過樂居的反爬/CORS 限制自動抓取內容；V1 先用欄位輸入驗證評分與地圖流程，下一階段接後端資料解析。</div>
+    <div class="note">目前為 V1 Prototype：樂居資料仍以欄位輸入驗證流程；四筆車程為測試資料，下一階段接後端導航/路況資料。</div>
   </div>
 
   <div class="grid">
@@ -66,13 +66,21 @@ button{border:0;border-radius:10px;padding:10px 15px;background:var(--accent);co
 
     <div>
       <div class="card">
-        <div class="section-title">③ 核心吸引力 P0</div>
-        <div class="scorebox"><div><b>TI 車程</b><div class="note">尖峰平均：上午 09:00–10:30 + 下午 16:30–18:30</div></div><div class="score" id="tiScore">—</div></div>
-        <div class="scorebox"><div><b>微風南山車程</b><div class="note">尖峰平均：上午 09:00–10:30 + 下午 16:30–18:30</div></div><div class="score" id="breezeScore">—</div></div>
+        <div class="section-title">③ 核心吸引力 P0（100%）</div>
+        <div class="scorebox"><div style="width:100%">
+          <div style="display:flex;justify-content:space-between;align-items:center"><b>TI 車程 · 20%</b><div class="score" id="tiScore">—</div></div>
+          <div class="note">上午 09:00–10:30：<b id="tiAM">—</b>　下午 16:30–18:30：<b id="tiPM">—</b></div>
+          <div class="note">尖峰平均：<b id="tiAvg">—</b> 分鐘</div>
+        </div></div>
+        <div class="scorebox"><div style="width:100%">
+          <div style="display:flex;justify-content:space-between;align-items:center"><b>微風南山車程 · 20%</b><div class="score" id="breezeScore">—</div></div>
+          <div class="note">上午 09:00–10:30：<b id="bAM">—</b>　下午 16:30–18:30：<b id="bPM">—</b></div>
+          <div class="note">尖峰平均：<b id="bAvg">—</b> 分鐘</div>
+        </div></div>
         <div class="scorebox"><div><b>總價</b><div class="score" id="totalScore">—</div></div></div>
         <div class="scorebox"><div><b>單坪價格</b><div class="score" id="unitScore">—</div></div></div>
         <div class="scorebox"><div><b>噪音</b><div class="score" id="noiseScore">70</div></div></div>
-        <div class="section-title">P0 總分 <span class="total" id="p0">—</span></div>
+        <div class="section-title">P0 總分 <span class="total" id="p0">—</span></div><div class="note">權重：TI 20% · 微風南山 20% · 總價 25% · 單坪價格 25% · 噪音 10%</div>
       </div>
 
       <div class="card">
@@ -127,14 +135,22 @@ function analyze(){
   const unit=+document.getElementById('unitPrice').value;
   const noise=+document.getElementById('noise').value;
 
-  // Prototype commute inputs. Replace with routing API in backend V1.
-  const tiAM=18,tiPM=26,bAM=23,bPM=28;
-  const tiAvg=(tiAM+tiPM)/2,bAvg=(bAM+bPM)/2;
+  // Prototype commute inputs: these four values are clearly separated by peak period.
+  // Replace these values with a routing/traffic API in the backend.
+  const tiAM=18, tiPM=26, bAM=23, bPM=28;
+  const tiAvg=(tiAM+tiPM)/2, bAvg=(bAM+bPM)/2;
   const ti=commuteScore(tiAvg,15,35);
   const br=commuteScore(bAvg,20,35);
   const ts=totalScore(total), us=unitScore(unit);
 
-  setScore('tiScore',ti);setScore('breezeScore',br);setScore('totalScore',ts);setScore('unitScore',us);setScore('noiseScore',noise);
+  setScore('tiScore',ti); setScore('breezeScore',br);
+  setScore('totalScore',ts); setScore('unitScore',us); setScore('noiseScore',noise);
+  document.getElementById('tiAM').textContent=tiAM;
+  document.getElementById('tiPM').textContent=tiPM;
+  document.getElementById('tiAvg').textContent=tiAvg.toFixed(1);
+  document.getElementById('bAM').textContent=bAM;
+  document.getElementById('bPM').textContent=bPM;
+  document.getElementById('bAvg').textContent=bAvg.toFixed(1);
   const p0=ti*.20+br*.20+ts*.25+us*.25+noise*.10;
   document.getElementById('p0').textContent=p0.toFixed(1);
 
