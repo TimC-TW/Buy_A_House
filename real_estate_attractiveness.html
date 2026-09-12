@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>房產吸引力分析器 V1</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--text:#18212f;--muted:#687386;--line:#e5e9ef;--accent:#2463eb}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif}
+.wrap{max-width:1200px;margin:auto;padding:24px}.header{margin-bottom:18px}.header h1{margin:0 0 6px;font-size:28px}.header p{margin:0;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px #00000008}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.map{height:430px;border-radius:12px;overflow:hidden}
+label{font-size:13px;font-weight:700;display:block;margin:10px 0 6px}input,select{width:100%;padding:10px 12px;border:1px solid #ccd3df;border-radius:10px;font-size:14px}
+button{border:0;border-radius:10px;padding:10px 15px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-top:12px}.secondary{background:#eef3ff;color:#174bb9;margin-left:6px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.scorebox{display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:9px}
+.score{font-size:24px;font-weight:800}.bar{height:8px;background:#edf0f4;border-radius:99px;overflow:hidden;margin-top:7px}.fill{height:100%;background:var(--accent)}
+.section-title{font-size:17px;font-weight:800;margin:4px 0 14px}.tag{display:inline-block;background:#f0f4fa;border-radius:99px;padding:5px 9px;font-size:12px;margin:3px}
+.note{color:var(--muted);font-size:12px;line-height:1.6}.total{font-size:42px;font-weight:900}.legend{font-size:13px;line-height:1.8}.legend b{font-weight:800}
+@media(max-width:850px){.grid{grid-template-columns:1fr}.map{height:350px}.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>🏠 房產吸引力分析器 V1</h1>
+    <p>貼上樂居物件 → 輸入/取得物件資料 → 地圖定位 → 計算 P0 / P1</p>
+  </div>
+
+  <div class="card">
+    <div class="section-title">① 物件</div>
+    <label>樂居 URL</label>
+    <input id="lejuUrl" value="https://www.leju.com.tw/community/L9771109574d321?mode=price">
+    <div class="row">
+      <div><label>物件名稱</label><input id="name" value="甲山林帝景1號"></div>
+      <div><label>物件地址</label><input id="address" value="新北市板橋區環河西路四段、華江三路"></div>
+    </div>
+    <div class="row">
+      <div><label>總價（萬元）</label><input id="totalPrice" type="number" value="4288"></div>
+      <div><label>單坪價格（萬元/坪）</label><input id="unitPrice" type="number" step="0.1" value="68"></div>
+    </div>
+    <div class="row">
+      <div>
+        <label>噪音</label>
+        <select id="noise"><option value="100">非常安靜</option><option value="70" selected>普通</option><option value="20">吵</option><option value="0">非常吵</option></select>
+      </div>
+      <div>
+        <label>操作</label>
+        <button onclick="analyze()">分析物件</button>
+        <button class="secondary" onclick="openLeju()">開啟樂居</button>
+      </div>
+    </div>
+    <div class="note">Prototype 限制：瀏覽器版目前不直接繞過樂居的反爬/CORS 限制自動抓取內容；V1 先用欄位輸入驗證評分與地圖流程，下一階段接後端資料解析。</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="section-title">② 地圖</div>
+      <div id="map" class="map"></div>
+      <div class="legend">
+        <span class="tag">🏠 房產</span>
+        <span class="tag">📍 德州儀器</span>
+        <span class="tag">📍 微風南山</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="section-title">③ 核心吸引力 P0</div>
+        <div class="scorebox"><div><b>TI 車程</b><div class="note">尖峰平均：上午 09:00–10:30 + 下午 16:30–18:30</div></div><div class="score" id="tiScore">—</div></div>
+        <div class="scorebox"><div><b>微風南山車程</b><div class="note">尖峰平均：上午 09:00–10:30 + 下午 16:30–18:30</div></div><div class="score" id="breezeScore">—</div></div>
+        <div class="scorebox"><div><b>總價</b><div class="score" id="totalScore">—</div></div></div>
+        <div class="scorebox"><div><b>單坪價格</b><div class="score" id="unitScore">—</div></div></div>
+        <div class="scorebox"><div><b>噪音</b><div class="score" id="noiseScore">70</div></div></div>
+        <div class="section-title">P0 總分 <span class="total" id="p0">—</span></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">④ 生活品質 P1</div>
+        <div class="row">
+          <div class="scorebox"><div><b>生活機能</b><div class="note">超商 250m / 超市 1.5km</div></div><div class="score" id="life">—</div></div>
+          <div class="scorebox"><div><b>人文素質</b><div class="note">區域統計指數（待接官方資料）</div></div><div class="score" id="culture">—</div></div>
+        </div>
+        <div class="scorebox"><div><b>道路壅塞</b><div class="note">尖峰道路壅塞指數（待接路況資料）</div></div><div class="score" id="traffic">—</div></div>
+        <div class="section-title">P1 總分 <span class="total" id="p1">—</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const TI = {lat:25.0587,lng:121.5483,name:"德州儀器台北分公司",address:"台北市松山區敦化北路168號"};
+const BREEZE = {lat:25.0342,lng:121.5660,name:"微風南山",address:"台北市信義區松智路17號"};
+const FALLBACK = {lat:25.0255,lng:121.4695,name:"甲山林帝景1號"};
+
+let map, markers=[];
+function initMap(){
+  map=L.map('map').setView([25.035,121.515],12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+}
+function marker(latlng,title,subtitle){
+  const m=L.marker(latlng).addTo(map).bindPopup("<b>"+title+"</b><br>"+subtitle);
+  markers.push(m); return m;
+}
+function clearMarkers(){markers.forEach(m=>map.removeLayer(m));markers=[]}
+
+async function geocode(q){
+  try{
+    const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&q='+encodeURIComponent(q);
+    const r=await fetch(url,{headers:{'Accept':'application/json'}});
+    const a=await r.json();
+    if(a.length) return {lat:+a[0].lat,lng:+a[0].lon};
+  }catch(e){}
+  return null;
+}
+
+function clamp(x){return Math.max(0,Math.min(100,x))}
+function commuteScore(avg, ideal, max){ if(avg<=ideal)return 100; if(avg>=max)return 0; return clamp(100*(max-avg)/(max-ideal)); }
+function totalScore(v){ if(v<=3500)return 100; if(v>=4200)return 0; return clamp(100*(4200-v)/(4200-3500)); }
+function unitScore(v){ if(v<=65)return 100; if(v>=105)return 0; return clamp(100*(105-v)/(105-65)); }
+
+function setScore(id,v){document.getElementById(id).textContent=v.toFixed(1);}
+
+function analyze(){
+  const total=+document.getElementById('totalPrice').value;
+  const unit=+document.getElementById('unitPrice').value;
+  const noise=+document.getElementById('noise').value;
+
+  // Prototype commute inputs. Replace with routing API in backend V1.
+  const tiAM=18,tiPM=26,bAM=23,bPM=28;
+  const tiAvg=(tiAM+tiPM)/2,bAvg=(bAM+bPM)/2;
+  const ti=commuteScore(tiAvg,15,35);
+  const br=commuteScore(bAvg,20,35);
+  const ts=totalScore(total), us=unitScore(unit);
+
+  setScore('tiScore',ti);setScore('breezeScore',br);setScore('totalScore',ts);setScore('unitScore',us);setScore('noiseScore',noise);
+  const p0=ti*.20+br*.20+ts*.25+us*.25+noise*.10;
+  document.getElementById('p0').textContent=p0.toFixed(1);
+
+  // Temporary P1 baseline for UI validation; replace by POI / regional / traffic APIs.
+  const life=75,culture=82,traffic=65;
+  setScore('life',life);setScore('culture',culture);setScore('traffic',traffic);
+  const p1=life*.35+culture*.35+traffic*.30;
+  document.getElementById('p1').textContent=p1.toFixed(1);
+
+  updateMap();
+}
+async function updateMap(){
+  clearMarkers();
+  let p=await geocode(document.getElementById('address').value);
+  if(!p)p={lat:FALLBACK.lat,lng:FALLBACK.lng};
+  const pm=marker([p.lat,p.lng],"🏠 "+document.getElementById('name').value,document.getElementById('address').value);
+  const tm=marker([TI.lat,TI.lng],"📍 "+TI.name,TI.address);
+  const bm=marker([BREEZE.lat,BREEZE.lng],"📍 "+BREEZE.name,BREEZE.address);
+  const group=L.featureGroup([pm,tm,bm]); map.fitBounds(group.getBounds().pad(.15));
+}
+function openLeju(){window.open(document.getElementById('lejuUrl').value,'_blank')}
+initMap(); analyze();
+</script>
+</body>
+</html>
